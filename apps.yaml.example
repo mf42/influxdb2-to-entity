@@ -1,0 +1,29 @@
+influxdb2_to_entity:
+  module: influxdb2_to_entity
+  class: InfluxDB2_to_entity
+  bucket: secret! influx_bucket
+  org : secret! influx_org_name
+  token : secret! influx_token
+  host : secret! influx_host
+  port: 8086
+  entity_settings:
+    entities:
+      ad_influx_house_consumption:
+        range_start: "date.truncate(t : today(), unit: 1mo)"
+        group_function:
+        options: 
+          - 'location = timezone.location(name: "Europe/Berlin")'
+        imports :
+          - date
+          - experimental
+          - timezone
+        daily_fetch_time : "00:00:01"
+        attributes :
+          friendly_name: "daily house consumption / current month"
+          unit_of_measurement: "kWh"
+        query : >
+            filter(fn: (r) => r.domain == "sensor" and r.entity_id == "house_consumption" and  r._field == "value")  
+            |> window(every: 1d) |> integral(unit: 1h) 
+            |> duplicate(as:"_time",column: "_start") 
+            |> map(fn: (r) => ({ r with _value: r._value /1000.0 }))
+            |> keep(columns: ["_time","_value"])
